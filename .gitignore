@@ -1,0 +1,10 @@
+.DS_Store
+.nrepl-port
+.cpcache/
+.clj-kondo/
+.lsp/
+.vscode/
+
+# Ephemeral clones and their nos build output. CI re-clones every run.
+/work/
+/build/

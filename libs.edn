@@ -1,0 +1,31 @@
+{robertluo/fun-map
+ {:git/url "https://github.com/robertluo/fun-map.git"
+  :git/ref "master"
+  ;; robertluo.fun-map.util is JVM-only; nos AOT-compiles the whole src tree,
+  ;; so it must stay out of the build and the loaded test set.
+  :magic   {:build {:exclude [robertluo.fun-map.util]}
+            :test  {:aliases [:test]
+                    :exclude [robertluo.fun-map.util]}}
+  :tasks   [build test]
+  :note    "Upstreamed (robertluo#70). Ships deps-clr.edn; magic.edn injected. master until a post-#70 tag exists."}
+
+ clojure/clr.test.check
+ {:git/url "https://github.com/clojure/clr.test.check.git"
+  :git/ref "master"
+  ;; Upstream deps.edn ships no :test alias; the injected deps-clr.edn
+  ;; (read by nos in place of deps.edn) supplies it.
+  :deps-clr {:deps    {}
+             :paths   ["src/main/clojure"]
+             :aliases {:test {:extra-paths ["src/test/clojure"]}}}
+  ;; The cljs-only assertions ns must not load on the CLR.
+  :magic   {:build {:exclude [clojure.test.check.clojure-test.assertions.cljs]}
+            :test  {:aliases [:test]
+                    :exclude [clojure.test.check.clojure-test.assertions.cljs]}}
+  :tasks   [build test]
+  :note    "David Miller's canonical repo, consumed directly."}
+
+ healthsamurai/matcho
+ {:git/url "https://github.com/flybot-sg/matcho.git"
+  :git/ref "magic"
+  :tasks   [build test]
+  :note    "flybot fork carrying the CLR reader conditionals; the canonical CLR source."}}

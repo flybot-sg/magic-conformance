@@ -1,0 +1,27 @@
+{:paths ["scripts"]
+ :tasks
+ {:requires ([conformance :as c])
+
+  check
+  {:doc  "Conformance-check one lib (clone, write magic.edn if absent, run nos): bb check <lib>"
+   :task (c/check! (first *command-line-args*))}
+
+  check-all
+  {:doc  "Conformance-check every lib in libs.edn"
+   :task (c/check-all!)}
+
+  clean
+  {:doc  "Remove the ephemeral work/ clone dir"
+   :task (do (require '[babashka.fs :as fs]) (fs/delete-tree "work"))}
+
+  rct
+  {:doc      "Run the Rich Comment Tests for the pure helpers"
+   :requires ([babashka.deps :as deps])
+   :task     (do
+               (deps/add-deps '{:deps {io.github.robertluo/rich-comment-tests
+                                       {:git/tag "v1.1.78"
+                                        :git/sha "c7d044f7ea03b1b7f96ccfbd8b101e7a4a199a53"}}})
+               (let [run (requiring-resolve 'com.mjdowney.rich-comment-tests/run-ns-tests!)
+                     {:keys [fail error]} (run 'conformance)]
+                 (when (pos? (+ (or fail 0) (or error 0)))
+                   (System/exit 1))))}}}
