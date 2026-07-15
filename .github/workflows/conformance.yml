@@ -1,0 +1,27 @@
+name: MAGIC conformance
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly re-validation against upstream drift.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  rct:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flybot-sg/ci-clj-clr:2.5.0
+    steps:
+      - uses: actions/checkout@v6
+      - run: bb rct
+
+  conformance:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flybot-sg/ci-clj-clr:2.5.0
+    steps:
+      - uses: actions/checkout@v6
+      - run: bb check-all
