@@ -1,3 +1,7 @@
+;; Example manifest: a couple of public libraries that build and test green
+;; under MAGIC, exercising the two runner features — inline :magic build/test
+;; options and injected deps-clr.edn. Copy this shape into your own manifest.
+
 {robertluo/fun-map
  {:git/url "https://github.com/robertluo/fun-map.git"
   :git/ref "master"
@@ -22,10 +26,4 @@
             :test  {:aliases [:test]
                     :exclude [clojure.test.check.clojure-test.assertions.cljs]}}
   :tasks   [build test]
-  :note    "David Miller's canonical repo, consumed directly."}
-
- healthsamurai/matcho
- {:git/url "https://github.com/flybot-sg/matcho.git"
-  :git/ref "magic"
-  :tasks   [build test]
-  :note    "flybot fork carrying the CLR reader conditionals; the canonical CLR source."}}
+  :note    "David Miller's canonical repo, consumed directly."}}

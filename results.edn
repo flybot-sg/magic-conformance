@@ -1,0 +1,21 @@
+{:magic-version "v0.10.0",
+ :total 2,
+ :pass 2,
+ :fail 0,
+ :libs
+ {clojure/clr.test.check
+  {:ok true,
+   :ref "master",
+   :sha "0d2654110f6cdc2e6f9aaa8053bc794c10ac2308",
+   :spec "750732716",
+   :tasks
+   [{:task "build", :ok true, :exit 0}
+    {:task "test", :ok true, :exit 0}]},
+  robertluo/fun-map
+  {:ok true,
+   :ref "master",
+   :sha "f704e3cd10f6a43bf7b14c2bc1365974ca6602f8",
+   :spec "-1756958436",
+   :tasks
+   [{:task "build", :ok true, :exit 0}
+    {:task "test", :ok true, :exit 0}]}}}
