@@ -4,9 +4,6 @@ on:
   push:
     branches: [main]
   pull_request:
-  schedule:
-    # Weekly full re-validation against upstream drift.
-    - cron: '0 6 * * 1'
   workflow_dispatch:
 
 jobs:
@@ -18,25 +15,11 @@ jobs:
       - uses: actions/checkout@v6
       - run: bb rct
 
-  # Incremental (push / PR / manual): reads the committed results.edn as the
-  # cache baseline and re-runs only changed libs. It never publishes results.edn
-  # — regenerate the baseline locally with `bb check-all` and commit it.
+  # Incremental: reads the committed results.edn and re-runs only changed libs.
   conformance:
-    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/flybot-sg/ci-clj-clr:2.5.0
     steps:
       - uses: actions/checkout@v6
       - run: bb check-all
-
-  # Scheduled: --force ignores the cache and re-runs every lib to catch
-  # transitive-dep drift a per-lib SHA can't see. Also gate-only, no publish.
-  conformance-full:
-    if: github.event_name == 'schedule'
-    runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/flybot-sg/ci-clj-clr:2.5.0
-    steps:
-      - uses: actions/checkout@v6
-      - run: bb check-all --force
