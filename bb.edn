@@ -3,12 +3,12 @@
  {:requires ([conformance :as c])
 
   check
-  {:doc  "Conformance-check one lib (clone, write magic.edn if absent, run nos): bb check <lib>"
+  {:doc  "Conformance-check one lib (clone, inject magic/deps-clr if absent, run nos): bb check <lib>"
    :task (c/check! (first *command-line-args*))}
 
   check-all
-  {:doc  "Conformance-check every lib in libs.edn"
-   :task (c/check-all!)}
+  {:doc  "Conformance-check every lib (incremental; writes results.edn). --force re-runs all."
+   :task (c/check-all! (boolean (some #{"--force" "-f"} *command-line-args*)))}
 
   clean
   {:doc  "Remove the ephemeral work/ clone dir"
