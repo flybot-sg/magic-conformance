@@ -12,7 +12,7 @@
 
 `magic` just needs a `magic.edn` config file at the root of the lib that `nostrand` can use to build and run the tests.
 
-So this repo pairs a small `nos`-driven **runner** with an example [`libs.edn`](libs.edn): it clones each listed library, hands `nos` a `magic.edn`/`deps-clr.edn` when the library ships none, and runs its build and tests in CI. The two libraries here are a green example — copy the manifest shape for your own set. The runner is a standalone babashka dependency (see [Reusing the runner](#reusing-the-runner)).
+So this repo pairs a small `nos`-driven **runner** with an example [`libs.edn`](libs.edn): it clones each listed library, hands `nos` a `magic.edn`/`deps-clr.edn` when the library ships none, and runs its build and tests in CI. The libraries here are a green example — copy the manifest shape for your own set. The runner is a standalone babashka dependency (see [Reusing the runner](#reusing-the-runner)).
 
 ## How it works
 

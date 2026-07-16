@@ -1,6 +1,6 @@
 {:magic-version "v0.10.0",
- :total 2,
- :pass 2,
+ :total 3,
+ :pass 3,
  :fail 0,
  :libs
  {clojure/clr.test.check
@@ -8,6 +8,14 @@
    :ref "master",
    :sha "0d2654110f6cdc2e6f9aaa8053bc794c10ac2308",
    :spec "750732716",
+   :tasks
+   [{:task "build", :ok true, :exit 0}
+    {:task "test", :ok true, :exit 0}]},
+  healthsamurai/matcho
+  {:ok true,
+   :ref "magic",
+   :sha "31225e185d5bbc2f13529730865bf9563677e646",
+   :spec "2018828442",
    :tasks
    [{:task "build", :ok true, :exit 0}
     {:task "test", :ok true, :exit 0}]},
