@@ -1,6 +1,9 @@
 (ns conformance
   "MAGIC conformance runner for libs.edn: clone each library, inject its
   magic.edn / deps-clr.edn when the repo ships none, then run its nos tasks.
+  When the clone's deps-clr.edn declares an executable :test alias, a
+  `cljr -X:test` task is appended, so the lib also runs on ClojureCLR
+  (opt out per entry with :cljr false).
   Incremental: a result is a pure function of (ref SHA, MAGIC version, spec),
   cached in results.edn and reused when all three are unchanged. See README."
   (:require [babashka.fs :as fs]
@@ -59,8 +62,25 @@
   (choose-tasks #{} '[build])        ;=> [build]
   )
 
+(defn- cljr-test-task
+  "The ClojureCLR lane invocation, when deps-clr declares a :test alias that
+  `cljr -X:test` can execute (an :exec-fn) and the entry does not set
+  :cljr false. Else nil."
+  [deps-clr-map cljr-opt]
+  (when (and (not (false? cljr-opt))
+             (get-in deps-clr-map [:aliases :test :exec-fn]))
+    ["cljr" "-X:test"]))
+
+^:rct/test
+(comment
+  (cljr-test-task {:aliases {:test {:exec-fn 'a/b}}} nil)      ;=> ["cljr" "-X:test"]
+  (cljr-test-task {:aliases {:test {:exec-fn 'a/b}}} false)    ;=> nil
+  (cljr-test-task {:aliases {:test {:extra-paths ["t"]}}} nil) ;=> nil
+  (cljr-test-task nil nil)                                     ;=> nil
+  )
+
 (defn- task->argv
-  "A vector task runs verbatim; a symbol runs as `nos <symbol>`."
+  "A vector task runs as its own argv; a symbol runs as `nos <symbol>`."
   [task]
   (if (vector? task) (mapv str task) ["nos" (str task)]))
 
@@ -77,16 +97,18 @@
 
 (defn- spec-hash
   "Digest of the manifest bits affecting the result independently of the SHA:
-  the task spec plus any injected magic.edn / deps-clr.edn config."
-  [tasks magic deps-clr]
-  (str (hash [tasks magic deps-clr])))
+  the task spec, any injected magic.edn / deps-clr.edn config, and the
+  :cljr opt-out."
+  [tasks magic deps-clr cljr]
+  (str (hash [tasks magic deps-clr cljr])))
 
 ^:rct/test
 (comment
-  (= (spec-hash nil nil nil) (spec-hash nil nil nil))                 ;=> true
-  (not= (spec-hash '[build] nil nil) (spec-hash '[test] nil nil))     ;=> true
-  (not= (spec-hash nil {:build {}} nil) (spec-hash nil nil nil))      ;=> true
-  (not= (spec-hash nil nil {:paths ["src"]}) (spec-hash nil nil nil)) ;=> true
+  (= (spec-hash nil nil nil nil) (spec-hash nil nil nil nil))                 ;=> true
+  (not= (spec-hash '[build] nil nil nil) (spec-hash '[test] nil nil nil))     ;=> true
+  (not= (spec-hash nil {:build {}} nil nil) (spec-hash nil nil nil nil))      ;=> true
+  (not= (spec-hash nil nil {:paths ["src"]} nil) (spec-hash nil nil nil nil)) ;=> true
+  (not= (spec-hash nil nil nil false) (spec-hash nil nil nil nil))            ;=> true
   )
 
 (defn- cacheable?
@@ -111,7 +133,7 @@
   "MAGIC version shipped by the pinned ci-clj-clr image; from conformance.edn
   (:magic-version) or this default. Bump it in the same commit that bumps the
   image tag: it invalidates the cache so every lib re-runs under the new compiler."
-  (:magic-version config "v0.10.0"))
+  (:magic-version config "v0.12.0"))
 
 (defn- read-manifest! []
   (edn/read-string (slurp "libs.edn")))
@@ -179,16 +201,27 @@
                               (spit target (with-out-str (pprint value))))
       :else               (println (str "  " file-name ": none, using nos defaults")))))
 
+(defn- read-deps-clr
+  "The clone's deps-clr.edn as data (its own or the injected one), nil when
+  absent or unreadable."
+  [dir]
+  (let [f (fs/file dir "deps-clr.edn")]
+    (when (fs/exists? f)
+      (try (edn/read-string (slurp f)) (catch Exception _ nil)))))
+
 (defn- run-entry!
   "Clone the lib, inject deps-clr.edn/magic.edn when it ships none, run its
-  tasks, and return its result map."
-  [[k {:keys [tasks magic deps-clr] :git/keys [url ref]}]]
+  nos tasks plus the ClojureCLR lane when available, and return its result map."
+  [[k {:keys [tasks magic deps-clr cljr] :git/keys [url ref]}]]
   (println (str "\n== " k " =="))
   (let [dir      (fs/file "work" (slug k))
         used-ref (clone! url (or ref default-ref) dir)
         _        (write-config! dir "deps-clr.edn" deps-clr)
         _        (write-config! dir "magic.edn" magic)
         chosen   (choose-tasks (present-configs dir) tasks)
+        chosen   (if-let [t (cljr-test-task (read-deps-clr dir) cljr)]
+                   (conj (vec chosen) t)
+                   chosen)
         _        (println (str "  tasks: " (str/join ", " (map task->label chosen))))
         results  (mapv #(run-task! dir %) chosen)]
     (println)
@@ -198,7 +231,7 @@
      :ok    (every? :ok results)
      :ref   used-ref
      :sha   (head-sha dir)
-     :spec  (spec-hash tasks magic deps-clr)
+     :spec  (spec-hash tasks magic deps-clr cljr)
      :tasks results}))
 
 (defn- record-of [{:keys [ok ref sha spec tasks]}]
@@ -223,12 +256,12 @@
 
 (defn- safe-run
   "run-entry! for [k entry], turning a thrown error into a failed record."
-  [[k {:keys [tasks magic deps-clr] :git/keys [ref]} :as entry]]
+  [[k {:keys [tasks magic deps-clr cljr] :git/keys [ref]} :as entry]]
   (try (run-entry! entry)
        (catch Exception e
          (println (str "  ERROR: " (ex-message e)))
          {:lib k :ok false :ref (or ref default-ref) :sha nil
-          :spec (spec-hash tasks magic deps-clr) :tasks []})))
+          :spec (spec-hash tasks magic deps-clr cljr) :tasks []})))
 
 (defn- print-summary [title libs]
   (println (str "\n=== " title " ==="))
@@ -259,9 +292,9 @@
         cur-magic   magic-version
         prior-magic (:magic-version prior)
         libs (reduce
-              (fn [acc [k {:keys [tasks magic deps-clr] :git/keys [url ref] :as entry}]]
+              (fn [acc [k {:keys [tasks magic deps-clr cljr] :git/keys [url ref] :as entry}]]
                 (let [ref*  (or ref default-ref)
-                      spec  (spec-hash tasks magic deps-clr)
+                      spec  (spec-hash tasks magic deps-clr cljr)
                       prev  (get-in prior [:libs k])]
                   (if (and (cacheable? force? prior-magic cur-magic prev spec)
                            (when-let [sha (remote-sha url ref*)] (= (:sha prev) sha)))

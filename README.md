@@ -6,9 +6,16 @@
 
 <br>
 
-Does a Clojure library still build and test under [MAGIC](https://github.com/flybot-sg/magic) (Clojure→.NET for Unity/IL2CPP)? MAGIC ships Clojure 1.10, so passing on stock ClojureCLR ([`cljr`](https://github.com/clojure/clojure-clr), on 1.12) doesn't mean passing on MAGIC. This runner clones each library in a manifest and runs its `nos build`/`nos test` on the [`ci-clj-clr`](https://github.com/flybot-sg/ci-clj-clr) image, caching results so only changed libraries re-run.
+Does a Clojure library still build and test under [MAGIC](https://github.com/flybot-sg/magic) (Clojure→.NET for Unity/IL2CPP)? MAGIC ships Clojure 1.10 and [ClojureCLR](https://github.com/clojure/clojure-clr) (`cljr`) is ahead of it, so passing on one CLR compiler says nothing about the other.
 
-`libs.edn` here is a small green example. `scripts/conformance.clj` is reusable — point it at your own manifest.
+This runner clones each library in a manifest and tests it on both, inside the [`ci-clj-clr`](https://github.com/flybot-sg/ci-clj-clr) image:
+
+- `nos build` and `nos test` (MAGIC), always.
+- `cljr -X:test` (ClojureCLR), when the library's `deps-clr.edn` has a runnable `:test` alias.
+
+Results are cached, so only changed libraries re-run.
+
+`libs.edn` here is a small green example. `scripts/conformance.clj` is reusable: point it at your own manifest.
 
 ## Use it in your project
 
@@ -30,16 +37,17 @@ Write a `libs.edn`, one entry per library:
   :git/ref  "master"                                ; branch, tag, or sha
   :magic    {:build {:exclude [my.lib.jvm-only]}}   ; optional: written as magic.edn if the repo ships none
   :deps-clr {:paths ["src"]}                        ; optional: written as deps-clr.edn if the repo ships none
-  :tasks    [build test]}}                          ; optional: auto-detected from magic.edn / dotnet.clj
+  :tasks    [build test]                            ; optional: auto-detected from magic.edn / dotnet.clj
+  :cljr     false}}                                  ; optional: skip the ClojureCLR lane
 ```
 
 Optional `conformance.edn` overrides the defaults:
 
 ```clojure
-{:default-ref "master" :magic-version "v0.10.0"}
+{:default-ref "master" :magic-version "v0.12.0"}
 ```
 
-Run (needs `nos` on your PATH, or run inside the `ci-clj-clr` image):
+Run inside the `ci-clj-clr` image, or with `nos` and `cljr` on your PATH:
 
 ```bash
 bb check my-lib        # one library
@@ -56,12 +64,12 @@ flowchart LR
   L[libs.edn] --> R[bb check-all]
   R -->|per library| S{ls-remote: ref SHA +<br/>MAGIC + config same?}
   S -->|yes| K[reuse cached result]
-  S -->|no| A[clone] --> B[inject magic.edn / deps-clr.edn<br/>if the repo ships none] --> C[nos build + test]
+  S -->|no| A[clone] --> B[inject magic.edn / deps-clr.edn<br/>if the repo ships none] --> C[nos build + test<br/>+ cljr -X:test when available]
   C --> W[(results.edn)]
   K --> W
 ```
 
-A result is keyed on **(ref SHA, MAGIC version, config spec)**. `results.edn` is generated locally with `bb check-all` and committed; CI only reads it as the cache baseline. Bump `:magic-version` when the `ci-clj-clr` image tag bumps — it re-runs every library under the new compiler.
+A result is keyed on **(ref SHA, MAGIC version, config spec)**. `results.edn` is generated locally with `bb check-all` and committed; CI only reads it as the cache baseline. Bump `:magic-version` when the `ci-clj-clr` image tag bumps: it invalidates the cache, so every library re-runs under the new compiler.
 
 ## Files
 
