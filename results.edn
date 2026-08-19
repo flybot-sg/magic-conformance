@@ -1,4 +1,4 @@
-{:magic-version "v0.10.0",
+{:magic-version "v0.12.0",
  :total 3,
  :pass 3,
  :fail 0,
@@ -7,7 +7,7 @@
   {:ok true,
    :ref "master",
    :sha "0d2654110f6cdc2e6f9aaa8053bc794c10ac2308",
-   :spec "750732716",
+   :spec "1071871813",
    :tasks
    [{:task "build", :ok true, :exit 0}
     {:task "test", :ok true, :exit 0}]},
@@ -15,7 +15,7 @@
   {:ok true,
    :ref "magic",
    :sha "31225e185d5bbc2f13529730865bf9563677e646",
-   :spec "2018828442",
+   :spec "321547452",
    :tasks
    [{:task "build", :ok true, :exit 0}
     {:task "test", :ok true, :exit 0}]},
@@ -23,7 +23,8 @@
   {:ok true,
    :ref "master",
    :sha "f704e3cd10f6a43bf7b14c2bc1365974ca6602f8",
-   :spec "-1756958436",
+   :spec "-393058841",
    :tasks
    [{:task "build", :ok true, :exit 0}
-    {:task "test", :ok true, :exit 0}]}}}
+    {:task "test", :ok true, :exit 0}
+    {:task "cljr -X:test", :ok true, :exit 0}]}}}
