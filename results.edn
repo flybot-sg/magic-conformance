@@ -1,29 +1,90 @@
-{:magic-version "v0.12.0",
- :total 3,
- :pass 3,
+{:magic-version "v0.13.0",
+ :total 9,
+ :pass 9,
  :fail 0,
  :libs
- {clojure/clr.test.check
+ {clojure/clr.data.generators
   {:ok true,
    :ref "master",
-   :sha "0d2654110f6cdc2e6f9aaa8053bc794c10ac2308",
-   :spec "1071871813",
+   :sha "287e25ae00f12183a44f762429aa89aab52e453e",
+   :spec "-561117629",
    :tasks
    [{:task "build", :ok true, :exit 0}
-    {:task "test", :ok true, :exit 0}]},
-  healthsamurai/matcho
+    {:task "test", :ok true, :exit 0}
+    {:task "cljr -X:test", :ok true, :exit 0}]},
+  clojure/clr.data.json
   {:ok true,
-   :ref "magic",
-   :sha "31225e185d5bbc2f13529730865bf9563677e646",
+   :ref "master",
+   :sha "f83b6a217754c020ef2b980de2f09df8a735a232",
+   :spec "1403209607",
+   :tasks
+   [{:task "build", :ok true, :exit 0}
+    {:task "test", :ok true, :exit 0}
+    {:task "cljr -X:test", :ok true, :exit 0}]},
+  clojure/clr.test.check
+  {:ok true,
+   :ref "v1.1.2",
+   :sha "26f34e601a0b919c21ed05978218ac5ac154322a",
+   :spec "-52816336",
+   :tasks
+   [{:task "build", :ok true, :exit 0}
+    {:task "test", :ok true, :exit 0}
+    {:task "cljr -X:test", :ok true, :exit 0}]},
+  flybot-sg/matcho
+  {:ok true,
+   :ref "clr-support",
+   :sha "fba2a65485f4d5b1e0a69f94a3d06c467478f53f",
    :spec "321547452",
    :tasks
    [{:task "build", :ok true, :exit 0}
-    {:task "test", :ok true, :exit 0}]},
+    {:task "test", :ok true, :exit 0}
+    {:task "cljr -X:test", :ok true, :exit 0}]},
+  juji/editscript
+  {:ok true,
+   :ref "master",
+   :sha "0692e0e7c32b6202af8d5353fecd56ac2a9af95c",
+   :spec "512159944",
+   :tasks
+   [{:task "build", :ok true, :exit 0}
+    {:task "test", :ok true, :exit 0}
+    {:task "cljr -X:test", :ok true, :exit 0}]},
+  org.clojure/math.combinatorics
+  {:ok true,
+   :ref "clr-support",
+   :sha "69673881b2130570d9620281d5edc822888e0d68",
+   :spec "321547452",
+   :tasks
+   [{:task "build", :ok true, :exit 0}
+    {:task "test", :ok true, :exit 0}
+    {:task "cljr -X:test", :ok true, :exit 0}]},
   robertluo/fun-map
   {:ok true,
    :ref "master",
    :sha "f704e3cd10f6a43bf7b14c2bc1365974ca6602f8",
    :spec "-393058841",
+   :tasks
+   [{:task "build", :ok true, :exit 0}
+    {:task "test", :ok true, :exit 0}
+    {:task "cljr -X:test", :ok true, :exit 0}]},
+  sg.flybot/lasagna-pattern
+  {:ok true,
+   :ref "main",
+   :sha "5377cf9972ada19d1df9eaaf3d2f4782232c339b",
+   :spec "1571224481",
+   :tasks
+   [{:task "collection: bb gen-clr-rct", :ok true, :exit 0}
+    {:task "collection: build", :ok true, :exit 0}
+    {:task "collection: test", :ok true, :exit 0}
+    {:task "collection: cljr -X:test", :ok true, :exit 0}
+    {:task "pattern: bb gen-clr-rct", :ok true, :exit 0}
+    {:task "pattern: build", :ok true, :exit 0}
+    {:task "pattern: test", :ok true, :exit 0}
+    {:task "pattern: cljr -X:test", :ok true, :exit 0}]},
+  sg.flybot/pullable
+  {:ok true,
+   :ref "master",
+   :sha "fd050d4ca9b7fa05d164009720b30a130f0e22ef",
+   :spec "-1652438548",
    :tasks
    [{:task "build", :ok true, :exit 0}
     {:task "test", :ok true, :exit 0}

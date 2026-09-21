@@ -4,6 +4,8 @@
   When the clone's deps-clr.edn declares an executable :test alias, a
   `cljr -X:test` task is appended, so the lib also runs on ClojureCLR
   (opt out per entry with :cljr false).
+  A clone carrying no CLR config of its own gets scanned one level deep, and
+  each directory that carries some runs as a component.
   Incremental: a result is a pure function of (ref SHA, MAGIC version, spec),
   cached in results.edn and reused when all three are unchanged. See README."
   (:require [babashka.fs :as fs]
@@ -20,6 +22,7 @@
 
 (def ^:private default-ref (:default-ref config "master"))
 (def ^:private build-markers #{"dotnet.clj" "magic.edn"})
+(def ^:private clr-markers (conj build-markers "deps-clr.edn"))
 (def ^:private results-file "results.edn")
 
 (defn- slug [lib-key]
@@ -97,18 +100,25 @@
 
 (defn- spec-hash
   "Digest of the manifest bits affecting the result independently of the SHA:
-  the task spec, any injected magic.edn / deps-clr.edn config, and the
-  :cljr opt-out."
-  [tasks magic deps-clr cljr]
-  (str (hash [tasks magic deps-clr cljr])))
+  the task spec, any injected magic.edn / deps-clr.edn config, the :cljr
+  opt-out, and the same four per component. Keys the runner ignores, :note
+  and friends, stay out of it so editing a note reuses the cached result.
+  An entry with no :components hashes the four alone: any other digest there
+  misses every result recorded in results.edn."
+  [{:keys [tasks magic deps-clr cljr components]}]
+  (str (hash (cond-> [tasks magic deps-clr cljr] components (conj components)))))
 
 ^:rct/test
 (comment
-  (= (spec-hash nil nil nil nil) (spec-hash nil nil nil nil))                 ;=> true
-  (not= (spec-hash '[build] nil nil nil) (spec-hash '[test] nil nil nil))     ;=> true
-  (not= (spec-hash nil {:build {}} nil nil) (spec-hash nil nil nil nil))      ;=> true
-  (not= (spec-hash nil nil {:paths ["src"]} nil) (spec-hash nil nil nil nil)) ;=> true
-  (not= (spec-hash nil nil nil false) (spec-hash nil nil nil nil))            ;=> true
+  (= (spec-hash {}) (spec-hash {}))                                     ;=> true
+  (not= (spec-hash '{:tasks [build]}) (spec-hash '{:tasks [test]}))     ;=> true
+  (not= (spec-hash {:magic {:build {}}}) (spec-hash {}))                ;=> true
+  (not= (spec-hash {:deps-clr {:paths ["src"]}}) (spec-hash {}))        ;=> true
+  (not= (spec-hash {:cljr false}) (spec-hash {}))                       ;=> true
+  (not= (spec-hash {:components {"a" {}}}) (spec-hash {}))              ;=> true
+  (= (spec-hash {:note "x"}) (spec-hash {:note "y"}))                   ;=> true
+  ;; the digest results.edn holds for every entry with no :components
+  (= (spec-hash {}) (str (hash [nil nil nil nil])))                     ;=> true
   )
 
 (defn- cacheable?
@@ -180,14 +190,31 @@
   (println (format "  clone %s @ %s" url ref))
   ref)
 
-(defn- run-task! [dir task]
+(defn- run-task! [dir label task]
   (let [argv (task->argv task)]
     (println (str "\n  $ " (str/join " " argv)))
     (let [{:keys [exit]} (apply p/shell {:dir (str dir) :continue true} argv)]
-      {:task (task->label task) :ok (zero? exit) :exit exit})))
+      {:task (str label (task->label task)) :ok (zero? exit) :exit exit})))
 
 (defn- present-configs [dir]
   (into #{} (filter #(fs/exists? (fs/file dir %))) build-markers))
+
+(defn- clr-dir?
+  "Whether dir carries CLR config of its own."
+  [dir]
+  (boolean (some #(fs/exists? (fs/file dir %)) clr-markers)))
+
+(defn- discover-components
+  "Directory names one level under dir that carry CLR config, sorted, or nil.
+  A dir carrying config of its own is a plain repo, and returns nil."
+  [dir]
+  (when-not (clr-dir? dir)
+    (->> (fs/list-dir dir)
+         (filter fs/directory?)
+         (filter clr-dir?)
+         (map #(str (fs/file-name %)))
+         sort
+         seq)))
 
 (defn- write-config!
   "Write value into dir as file-name, but only when the clone ships none of its
@@ -209,29 +236,41 @@
     (when (fs/exists? f)
       (try (edn/read-string (slurp f)) (catch Exception _ nil)))))
 
+(defn- run-dir!
+  "Inject config into dir, choose its tasks, run them, and return their results.
+  label prefixes each task name, so a monorepo's components stay apart."
+  [dir label {:keys [tasks magic deps-clr cljr]}]
+  (write-config! dir "deps-clr.edn" deps-clr)
+  (write-config! dir "magic.edn" magic)
+  (let [base   (vec (choose-tasks (present-configs dir) tasks))
+        chosen (if-let [t (cljr-test-task (read-deps-clr dir) cljr)] (conj base t) base)]
+    (println (str "  tasks: " (str/join ", " (map task->label chosen))))
+    (mapv #(run-task! dir label %) chosen)))
+
 (defn- run-entry!
-  "Clone the lib, inject deps-clr.edn/magic.edn when it ships none, run its
-  nos tasks plus the ClojureCLR lane when available, and return its result map."
-  [[k {:keys [tasks magic deps-clr cljr] :git/keys [url ref]}]]
+  "Clone the lib, inject deps-clr.edn/magic.edn where it ships none, run its
+  nos tasks plus cljr -X:test when available, and return its result map.
+  A monorepo runs one directory per component: those discovered under the clone
+  plus any the entry's :components names, each with that key's own config."
+  [[k {:keys [components] :git/keys [url ref] :as entry}]]
   (println (str "\n== " k " =="))
   (let [dir      (fs/file "work" (slug k))
         used-ref (clone! url (or ref default-ref) dir)
-        _        (write-config! dir "deps-clr.edn" deps-clr)
-        _        (write-config! dir "magic.edn" magic)
-        chosen   (choose-tasks (present-configs dir) tasks)
-        chosen   (if-let [t (cljr-test-task (read-deps-clr dir) cljr)]
-                   (conj (vec chosen) t)
-                   chosen)
-        _        (println (str "  tasks: " (str/join ", " (map task->label chosen))))
-        results  (mapv #(run-task! dir %) chosen)]
+        subdirs  (sort (distinct (concat (keys components) (discover-components dir))))
+        results  (if (seq subdirs)
+                   (vec (mapcat (fn [sub]
+                                  (println (str "\n  -- " sub " --"))
+                                  (run-dir! (fs/file dir sub) (str sub ": ") (get components sub)))
+                                subdirs))
+                   (run-dir! dir "" entry))]
     (println)
     (doseq [{:keys [task ok exit]} results]
-      (println (format "  %-18s %s (exit %d)" task (if ok "PASS" "FAIL") exit)))
+      (println (format "  %-32s %s (exit %d)" task (if ok "PASS" "FAIL") exit)))
     {:lib   k
      :ok    (every? :ok results)
      :ref   used-ref
      :sha   (head-sha dir)
-     :spec  (spec-hash tasks magic deps-clr cljr)
+     :spec  (spec-hash entry)
      :tasks results}))
 
 (defn- record-of [{:keys [ok ref sha spec tasks]}]
@@ -256,12 +295,12 @@
 
 (defn- safe-run
   "run-entry! for [k entry], turning a thrown error into a failed record."
-  [[k {:keys [tasks magic deps-clr cljr] :git/keys [ref]} :as entry]]
+  [[k {:git/keys [ref] :as conf} :as entry]]
   (try (run-entry! entry)
        (catch Exception e
          (println (str "  ERROR: " (ex-message e)))
          {:lib k :ok false :ref (or ref default-ref) :sha nil
-          :spec (spec-hash tasks magic deps-clr cljr) :tasks []})))
+          :spec (spec-hash conf) :tasks []})))
 
 (defn- print-summary [title libs]
   (println (str "\n=== " title " ==="))
@@ -292,9 +331,9 @@
         cur-magic   magic-version
         prior-magic (:magic-version prior)
         libs (reduce
-              (fn [acc [k {:keys [tasks magic deps-clr cljr] :git/keys [url ref] :as entry}]]
+              (fn [acc [k {:git/keys [url ref] :as entry}]]
                 (let [ref*  (or ref default-ref)
-                      spec  (spec-hash tasks magic deps-clr cljr)
+                      spec  (spec-hash entry)
                       prev  (get-in prior [:libs k])]
                   (if (and (cacheable? force? prior-magic cur-magic prev spec)
                            (when-let [sha (remote-sha url ref*)] (= (:sha prev) sha)))

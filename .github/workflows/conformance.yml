@@ -10,7 +10,7 @@ jobs:
   rct:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/flybot-sg/ci-clj-clr:2.7.0
+      image: ghcr.io/flybot-sg/ci-clj-clr:2.8.0
     steps:
       - uses: actions/checkout@v6
       - run: bb rct
@@ -19,7 +19,7 @@ jobs:
   conformance:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/flybot-sg/ci-clj-clr:2.7.0
+      image: ghcr.io/flybot-sg/ci-clj-clr:2.8.0
     steps:
       - uses: actions/checkout@v6
       - run: bb check-all

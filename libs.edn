@@ -1,8 +1,85 @@
-;; Example manifest: a few public libraries that build and test green under
-;; MAGIC, exercising the runner's features — inline :magic build/test options,
-;; injected deps-clr.edn, and plain nos defaults. Copy this shape for your own.
+{clojure/clr.data.generators
+ {:git/url  "https://github.com/clojure/clr.data.generators.git"
+  :git/ref  "master"
+  ;; Upstream ships no deps-clr.edn; the injected one supplies paths and :test.
+  :deps-clr {:deps    {}
+             :paths   ["src/main/clojure"]
+             :aliases {:test {:extra-paths ["src/test/clojure"]
+                              :extra-deps  {io.github.dmiller/test-runner {:git/tag "v0.5.3clr"
+                                                                           :git/sha "ae91dd2727bbf70eb3a6d869a19953de3819dfbc"}}
+                              :exec-fn     cognitect.test-runner.api/test
+                              :exec-args   {:dirs ["src/test/clojure"]}}}}
+  :magic    {:test {:aliases [:test]}}
+  :tasks    [build test]
+  :note     "David Miller's canonical repo, consumed directly."}
 
-{robertluo/fun-map
+ clojure/clr.data.json
+ {:git/url  "https://github.com/clojure/clr.data.json.git"
+  :git/ref  "master"
+  :deps-clr {:deps    {}
+             :paths   ["src/main/clojure"]
+             :aliases {:test {:extra-paths ["src/test/clojure"]
+                              :extra-deps  {io.github.dmiller/test-runner {:git/tag "v0.5.3clr"
+                                                                           :git/sha "ae91dd2727bbf70eb3a6d869a19953de3819dfbc"}}
+                              :exec-fn     cognitect.test-runner.api/test
+                              ;; json-test hardcodes Windows CRLF in one pprint case, see :note
+                              :exec-args   {:dirs     ["src/test/clojure"]
+                                            :patterns ["clojure\\.data\\.json-test-suite-test$"]}}}}
+  :magic    {:test {:aliases      [:test]
+                    :exclude-vars [clojure.data.json-test/pretty-print-nonescaped-unicode
+                                   clojure.data.json-test-suite-test/i-number-huge-exp-test
+                                   clojure.data.json-test-suite-test/i-number-neg-int-huge-exp-test
+                                   clojure.data.json-test-suite-test/i-number-pos-double-huge-exp-test
+                                   clojure.data.json-test-suite-test/i-number-real-neg-overflow-test
+                                   clojure.data.json-test-suite-test/i-number-real-pos-overflow-test]}}
+  :tasks    [build test]
+  :note     "The 6 excluded vars are platform, not MAGIC. net471/Mono Double.Parse throws OverflowException on 5 JSONTestSuite huge-exponent cases where modern .NET returns Inf. The pprint case hardcodes Windows CRLF, and fails on cljr too. The cognitect runner filters namespaces and not vars, so cljr runs the JSONTestSuite namespace and leaves the API suite to MAGIC."}
+
+ clojure/clr.test.check
+ {:git/url  "https://github.com/clojure/clr.test.check.git"
+  :git/ref  "v1.1.2"
+  ;; Upstream deps.edn ships no :test alias; the injected deps-clr.edn
+  ;; (read by nos in place of deps.edn) supplies it.
+  :deps-clr {:deps    {}
+             :paths   ["src/main/clojure"]
+             :aliases {:test {:extra-paths ["src/test/clojure"]
+                              :extra-deps  {io.github.dmiller/test-runner {:git/tag "v0.5.3clr"
+                                                                           :git/sha "ae91dd2727bbf70eb3a6d869a19953de3819dfbc"}}
+                              :exec-fn     cognitect.test-runner.api/test
+                              ;; clojure-test-test asserts the pre-flybot5 split output, see :note
+                              :exec-args   {:dirs     ["src/test/clojure"]
+                                            :patterns ["clojure\\.test\\.check\\.test$"
+                                                       "clojure\\.test\\.check\\.(random|results|rose-tree)-test$"]}}}}
+  ;; The cljs-only assertions ns must not load on the CLR.
+  :magic    {:build {:exclude [clojure.test.check.clojure-test.assertions.cljs]}
+             :test  {:aliases      [:test]
+                     :exclude      [clojure.test.check.clojure-test.assertions.cljs]
+                     :exclude-vars [clojure.test.check.clojure-test-test/can-report-failures]}}
+  :tasks    [build test]
+  :note     "David Miller's canonical repo, consumed directly. Held at v1.1.2 because every later release goes red under MAGIC: shrink-long's :cljr branch calls Math/Abs on Int64.MinValue. can-report-failures asserts the trailing empty string clojure.string/split returned before ClojureCLR 1.11.0-flybot5 applied Java's rules."}
+
+ flybot-sg/matcho
+ {:git/url "https://github.com/flybot-sg/matcho.git"
+  :git/ref "clr-support"
+  :tasks   [build test]
+  :note    "flybot fork of healthsamurai/matcho carrying the CLR reader conditionals (plain nos defaults, no inline config needed). Pin clr-support, the only branch shipping deps-clr.edn. rct-clr needs it for the =>> matchers in the generated CLR tests."}
+
+ juji/editscript
+ {:git/url "https://github.com/juji-io/editscript.git"
+  :git/ref "master"
+  ;; editscript.correctness-test calls reduce-kv over a subvec, see :note
+  :magic   {:test {:aliases [:test]
+                   :exclude [editscript.correctness-test]}}
+  :tasks   [build test]
+  :note    "Needs MAGIC v0.13.0: #146 binds a deftype method to the slot it overrides, without which nos build dies with `No match binding methodcount`. IKVReduce on SubVector is CLJ-2065, a Clojure 1.11 addition MAGIC's 1.10 runtime lacks, and only the test's own reference model calls it. Drop the exclusion once MAGIC moves off 1.10."}
+
+ org.clojure/math.combinatorics
+ {:git/url "https://github.com/flybot-sg/math.combinatorics.git"
+  :git/ref "clr-support"
+  :tasks   [build test]
+  :note    "CLR port of org.clojure/math.combinatorics. Pin by branch, never by the tip sha: GitHub refuses to serve an unadvertised object, so a cold clone dies with `not our ref`. The suite is clojure.math.test-combinatorics, which misses the runner's default -test pattern, so read the assertion count and not the exit code."}
+
+ robertluo/fun-map
  {:git/url "https://github.com/robertluo/fun-map.git"
   :git/ref "master"
   ;; robertluo.fun-map.util is JVM-only; nos AOT-compiles the whole src tree,
@@ -13,23 +90,30 @@
   :tasks   [build test]
   :note    "Upstreamed (robertluo#70). Ships deps-clr.edn; magic.edn injected. master until a post-#70 tag exists."}
 
- clojure/clr.test.check
- {:git/url "https://github.com/clojure/clr.test.check.git"
-  :git/ref "master"
-  ;; Upstream deps.edn ships no :test alias; the injected deps-clr.edn
-  ;; (read by nos in place of deps.edn) supplies it.
-  :deps-clr {:deps    {}
-             :paths   ["src/main/clojure"]
-             :aliases {:test {:extra-paths ["src/test/clojure"]}}}
-  ;; The cljs-only assertions ns must not load on the CLR.
-  :magic   {:build {:exclude [clojure.test.check.clojure-test.assertions.cljs]}
-            :test  {:aliases [:test]
-                    :exclude [clojure.test.check.clojure-test.assertions.cljs]}}
-  :tasks   [build test]
-  :note    "David Miller's canonical repo, consumed directly."}
+ sg.flybot/lasagna-pattern
+ {:git/url    "https://github.com/flybot-sg/lasagna-pattern.git"
+  :git/ref    "main"
+  ;; A monorepo. The runner finds pattern and collection by their deps-clr.edn
+  ;; and runs each in its own directory; these keys add the magic.edn the repo
+  ;; ships none of, and the rct-clr generation step that has to precede a run.
+  :components {"collection" {:magic {:build {:exclude [sg.flybot.pullable.collection.malli
+                                                       sg.flybot.pullable.sample]}
+                                     :test  {:exclude [sg.flybot.pullable.collection.malli
+                                                       sg.flybot.pullable.sample
+                                                       sg.flybot.pullable.collection.malli-rct-test]}}
+                             :tasks [["bb" "gen-clr-rct"] build test]}
+               "pattern"    {:magic {:test {:exclude [sg.flybot.pullable.rct-test
+                                                      sg.flybot.pullable.malli-rct-test]}}
+                             :tasks [["bb" "gen-clr-rct"] build test]}}
+  :note       "Pattern DSL and CRUD collections. The remote component is JVM only and carries no CLR config, so discovery skips it. Malli has no CLR port, so the Malli RCT blocks sit under test/ and both CLR runners skip them."}
 
- healthsamurai/matcho
- {:git/url "https://github.com/flybot-sg/matcho.git"
-  :git/ref "magic"
+ sg.flybot/pullable
+ {:git/url "https://github.com/flybot-sg/lasagna-pull.git"
+  :git/ref "master"
+  ;; sg.flybot.pullable.schema requires malli, which has no CLR port.
+  :magic   {:build {:exclude [sg.flybot.pullable.schema]}
+            :test  {:aliases [:test]
+                    :exclude [sg.flybot.pullable.schema
+                              sg.flybot.pullable.schema-test]}}
   :tasks   [build test]
-  :note    "flybot fork carrying the CLR reader conditionals; the canonical CLR source (plain nos defaults, no inline config needed)."}}
+  :note    "lasagna-pull, the client and server query contract. Upstream takes ClojureCLR support only, so master ships deps-clr.edn and a cljr CI step and no magic.edn: the :magic map is injected into the clone instead."}}

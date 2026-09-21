@@ -8,3 +8,6 @@
 # Ephemeral clones and their nos build output. CI re-clones every run.
 /work/
 /build/
+
+# Git dependency cache, when GITLIBS points here for a local docker run.
+/.gitlibs/

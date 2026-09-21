@@ -13,9 +13,11 @@ This runner clones each library in a manifest and tests it on both, inside the [
 - `nos build` and `nos test` (MAGIC), always.
 - `cljr -X:test` (ClojureCLR), when the library's `deps-clr.edn` has a runnable `:test` alias.
 
+The runner scans a clone that carries no CLR config one level deep. Each directory that carries some runs as its own component.
+
 Results are cached, so only changed libraries re-run.
 
-`libs.edn` here is a small green example. `scripts/conformance.clj` is reusable: point it at your own manifest.
+`libs.edn` here lists the public libraries we have ported. `scripts/conformance.clj` is reusable: point it at your own manifest.
 
 ## Use it in your project
 
@@ -41,6 +43,17 @@ Write a `libs.edn`, one entry per library:
   :cljr     false}}                                  ; optional: skip the ClojureCLR lane
 ```
 
+A monorepo keeps its CLR config per component. The runner finds those directories and runs each one. Name a component to give it config of its own. The four keys above mean the same inside `:components`.
+
+```clojure
+{my-org/my-monorepo
+ {:git/url    "https://github.com/my-org/my-monorepo.git"
+  :git/ref    "main"
+  :components {"core" {:magic {:test {:exclude [my.core.jvm-only]}}
+                       :tasks [["bb" "gen-clr-rct"] build test]}
+               "web"  {:tasks [build test]}}}}
+```
+
 Optional `conformance.edn` overrides the defaults:
 
 ```clojure
@@ -64,7 +77,7 @@ flowchart LR
   L[libs.edn] --> R[bb check-all]
   R -->|per library| S{ls-remote: ref SHA +<br/>MAGIC + config same?}
   S -->|yes| K[reuse cached result]
-  S -->|no| A[clone] --> B[inject magic.edn / deps-clr.edn<br/>if the repo ships none] --> C[nos build + test<br/>+ cljr -X:test when available]
+  S -->|no| A[clone] --> D[discover component dirs,<br/>else the clone root] --> B[inject magic.edn / deps-clr.edn<br/>if the dir ships none] --> C[nos build + test<br/>+ cljr -X:test when available]
   C --> W[(results.edn)]
   K --> W
 ```
@@ -74,7 +87,8 @@ A result is keyed on **(ref SHA, MAGIC version, config spec)**. `results.edn` is
 ## Files
 
 ```
-libs.edn                 the manifest (example: three green libs)
+libs.edn                 the manifest (the public libs we have ported)
+conformance.edn          MAGIC version the results are keyed on
 scripts/conformance.clj  the runner
 deps.edn                 exposes the runner as a dependency
 results.edn              committed run snapshot + cache baseline
